@@ -11,16 +11,43 @@ import {
 
 export default function App() {
   const [modalVisible, setModalVisible] = useState(false);
+  const [camaraActiva, setCamaraActiva] = useState(true);
+  const [flashEncendido, setFlashEncendido] = useState(true);
+
+  const enviarComando = (comando) => {
+    fetch(`http://192.168.4.1/${comando}`)
+      .then(res => res.text())
+      .then(text => console.log('Respuesta del auto:', text))
+      .catch(err => console.error('Error al conectar con el auto:', err));
+  };
+
+  const toggleFlash = () => {
+    const ruta = flashEncendido ? 'flash_off' : 'flash_on';
+    fetch(`http://192.168.4.1/${ruta}`)
+      .then(() => setFlashEncendido(!flashEncendido))
+      .catch(err => console.error('Error con el flash:', err));
+  };
+
+  const toggleCamara = () => {
+    setCamaraActiva(!camaraActiva);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Título */}
       <Text style={styles.title}>UTALControl</Text>
 
       <View style={styles.panel}>
         {/* Cámara */}
         <View style={styles.cameraView}>
-          <Text style={styles.cameraText}>Vista de cámara</Text>
+          {camaraActiva ? (
+            <Image
+              source={{ uri: `http://192.168.4.1/cam?${Date.now()}` }}
+              style={{ width: 320, height: 100 }}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text style={styles.cameraText}>Cámara apagada</Text>
+          )}
         </View>
 
         {/* Estado de conexión */}
@@ -47,25 +74,70 @@ export default function App() {
         {/* Joystick */}
         <View style={styles.joystick}>
           <View style={styles.joystickRow}>
-            <TouchableOpacity style={styles.arrowButton}><Text style={styles.arrowText}>↑</Text></TouchableOpacity>
+            <TouchableOpacity
+              style={styles.arrowButton}
+              onPress={() => enviarComando('atras')}
+            >
+              <Text style={styles.arrowText}>↑</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.joystickRow}>
-            <TouchableOpacity style={styles.arrowButton}><Text style={styles.arrowText}>←</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.stopButton}><Text style={styles.stopText}>STOP</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.arrowButton}><Text style={styles.arrowText}>→</Text></TouchableOpacity>
+            <TouchableOpacity
+              style={styles.arrowButton}
+              onPress={() => enviarComando('derecha')}
+            >
+              <Text style={styles.arrowText}>←</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.stopButton}
+              onPress={() => enviarComando('stop')}
+            >
+              <Text style={styles.stopText}>STOP</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.arrowButton}
+              onPress={() => enviarComando('izquierda')}
+            >
+              <Text style={styles.arrowText}>→</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.joystickRow}>
-            <TouchableOpacity style={styles.arrowButton}><Text style={styles.arrowText}>↓</Text></TouchableOpacity>
+            <TouchableOpacity
+              style={styles.arrowButton}
+              onPress={() => enviarComando('adelante')}
+            >
+              <Text style={styles.arrowText}>↓</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* Velocidad */}
+        {/*}
         <View style={styles.speedControls}>
           <Text style={styles.speedLabel}>Velocidad de Servos</Text>
           <View style={styles.speedRow}>
-            <TouchableOpacity style={styles.speedButton}><Text style={styles.speedText}>–</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.speedButton}><Text style={styles.speedText}>+</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.speedButton}>
+              <Text style={styles.speedText}>–</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.speedButton}>
+              <Text style={styles.speedText}>+</Text>
+            </TouchableOpacity>
           </View>
+        </View>
+        */}
+
+        {/* Botones Flash y Cámara */}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12, gap: 12 }}>
+          <TouchableOpacity style={styles.infoButton} onPress={toggleFlash}>
+            <Text style={styles.infoButtonText}>
+              {flashEncendido ? 'Apagar Flash' : 'Encender Flash'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.infoButton} onPress={toggleCamara}>
+            <Text style={styles.infoButtonText}>
+              {camaraActiva ? 'Apagar Cámara' : 'Encender Cámara'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -77,7 +149,7 @@ export default function App() {
             <Text style={styles.modalText}>
               El auto ha creado su propia red WiFi.{"\n\n"}
               1. En tu teléfono o computador, abre la configuración WiFi.{"\n"}
-              2. Conéctate a la red AutoESP32.{"\n\n"}
+              2. Conéctate a la red **ESP32-AUTO**.{"\n\n"}
               Luego vuelve a esta aplicación para controlar el auto desde aquí.{"\n\n"}
               🔐 Contraseña: No requiere
             </Text>
@@ -95,8 +167,8 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop:"12%",flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 16 },
-  title: { textAlign:"center",width: 340,fontSize: 22, fontWeight: 'bold', backgroundColor: '#b91c1c', color: 'white', paddingHorizontal: 24, paddingVertical: 10, marginBottom: 2, shadowColor: '#000', elevation: 3 },
+  container: { marginTop:"12%", flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  title: { textAlign:"center", width: 340, fontSize: 22, fontWeight: 'bold', backgroundColor: '#b91c1c', color: 'white', paddingHorizontal: 24, paddingVertical: 10, marginBottom: 2, shadowColor: '#000', elevation: 3 },
   panel: { width: 340, backgroundColor: 'white', borderColor: '#ccc', borderWidth: 1, padding: 16, justifyContent: 'space-between', shadowColor: '#000', elevation: 6 },
   cameraView: { height: 100, backgroundColor: '#e5e7eb', borderColor: '#9ca3af', borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   cameraText: { color: '#6b7280', fontStyle: 'italic', fontSize: 13 },
