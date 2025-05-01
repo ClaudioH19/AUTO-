@@ -3,11 +3,15 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Image,
   Modal,
   StyleSheet,
   SafeAreaView,
+  Image,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
+
+// ======== DIRECCIÓN IP GLOBAL DEL AUTO ========
+const BASE_URL = 'http://192.168.193.223'; // Cambia esto según la IP real del ESP32
 
 export default function App() {
   const [modalVisible, setModalVisible] = useState(false);
@@ -15,7 +19,7 @@ export default function App() {
   const [flashEncendido, setFlashEncendido] = useState(true);
 
   const enviarComando = (comando) => {
-    fetch(`http://192.168.4.1/${comando}`)
+    fetch(`${BASE_URL}/${comando}`)
       .then(res => res.text())
       .then(text => console.log('Respuesta del auto:', text))
       .catch(err => console.error('Error al conectar con el auto:', err));
@@ -23,7 +27,7 @@ export default function App() {
 
   const toggleFlash = () => {
     const ruta = flashEncendido ? 'flash_off' : 'flash_on';
-    fetch(`http://192.168.4.1/${ruta}`)
+    fetch(`${BASE_URL}/${ruta}`)
       .then(() => setFlashEncendido(!flashEncendido))
       .catch(err => console.error('Error con el flash:', err));
   };
@@ -40,10 +44,11 @@ export default function App() {
         {/* Cámara */}
         <View style={styles.cameraView}>
           {camaraActiva ? (
-            <Image
-              source={{ uri: `http://192.168.4.1/cam?${Date.now()}` }}
-              style={{ width: 320, height: 100 }}
-              resizeMode="cover"
+            <WebView
+              source={{ uri: `${BASE_URL}/stream` }}
+              javaScriptEnabled
+              style={{ width: 300, height: 240,transform: [{ rotate: '90deg' }] }}
+              scalesPageToFit
             />
           ) : (
             <Text style={styles.cameraText}>Cámara apagada</Text>
@@ -111,23 +116,8 @@ export default function App() {
           </View>
         </View>
 
-        {/* Velocidad */}
-        {/*}
-        <View style={styles.speedControls}>
-          <Text style={styles.speedLabel}>Velocidad de Servos</Text>
-          <View style={styles.speedRow}>
-            <TouchableOpacity style={styles.speedButton}>
-              <Text style={styles.speedText}>–</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.speedButton}>
-              <Text style={styles.speedText}>+</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-        */}
-
         {/* Botones Flash y Cámara */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12, gap: 12 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 0, gap: 12 }}>
           <TouchableOpacity style={styles.infoButton} onPress={toggleFlash}>
             <Text style={styles.infoButtonText}>
               {flashEncendido ? 'Apagar Flash' : 'Encender Flash'}
@@ -170,7 +160,7 @@ const styles = StyleSheet.create({
   container: { marginTop:"12%", flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 16 },
   title: { textAlign:"center", width: 340, fontSize: 22, fontWeight: 'bold', backgroundColor: '#b91c1c', color: 'white', paddingHorizontal: 24, paddingVertical: 10, marginBottom: 2, shadowColor: '#000', elevation: 3 },
   panel: { width: 340, backgroundColor: 'white', borderColor: '#ccc', borderWidth: 1, padding: 16, justifyContent: 'space-between', shadowColor: '#000', elevation: 6 },
-  cameraView: { height: 100, backgroundColor: '#e5e7eb', borderColor: '#9ca3af', borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  cameraView: { height: 180, backgroundColor: '#e5e7eb', borderColor: '#9ca3af', borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   cameraText: { color: '#6b7280', fontStyle: 'italic', fontSize: 13 },
   connectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   statusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
@@ -185,11 +175,6 @@ const styles = StyleSheet.create({
   arrowText: { color: 'white', fontSize: 24, fontWeight: 'bold' },
   stopButton: { width: 80, height: 80, backgroundColor: '#4b5563', alignItems: 'center', justifyContent: 'center', borderRadius: 8, elevation: 4 },
   stopText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
-  speedControls: { alignItems: 'center', gap: 8 },
-  speedLabel: { fontSize: 13, color: '#1f2937' },
-  speedRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  speedButton: { width: 80, height: 80, backgroundColor: '#d1d5db', alignItems: 'center', justifyContent: 'center', borderRadius: 8, elevation: 2 },
-  speedText: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 16 },
   modalContent: { backgroundColor: 'white', width: '100%', maxWidth: 360, borderRadius: 12, padding: 24, elevation: 8 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
