@@ -13,7 +13,7 @@ const char* password = "12345678";
 #define IN4 14
 #define ENA 2
 #define ENB 4 
-#define FLASH_LED_PIN 4      // LED blanco del ESP32-CAM
+#define FLASH_LED_PIN 4  // LED blanco del ESP32-CAM
 
 // ======== PINES CÁMARA - AI-Thinker ESP32-CAM ========
 #define CAMERA_MODEL_AI_THINKER
@@ -29,7 +29,7 @@ void detenerMotores() {
 void setup() {
   Serial.begin(115200);
 
-  // ==== Configuración cámara (QVGA, 1 buffer) ====
+  // ==== Configuración cámara ====
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -52,7 +52,7 @@ void setup() {
   config.xclk_freq_hz = 10000000;
   config.pixel_format = PIXFORMAT_JPEG;
   config.frame_size = FRAMESIZE_QVGA;
-  config.jpeg_quality = 15;
+  config.jpeg_quality = 30;
   config.fb_count = 1;
   config.fb_location = CAMERA_FB_IN_DRAM;
   config.grab_mode = CAMERA_GRAB_LATEST;
@@ -75,7 +75,7 @@ void setup() {
   digitalWrite(ENA, HIGH);
   digitalWrite(ENB, HIGH);
 
-  // ==== Conexión a red WiFi ====
+  // ==== Conexión WiFi ====
   WiFi.begin(ssid, password);
   WiFi.setSleep(false);
   Serial.print("Conectando a WiFi");
@@ -85,11 +85,11 @@ void setup() {
   Serial.println("\n✅ Conectado a WiFi");
   Serial.print("IP local: "); Serial.println(WiFi.localIP());
 
-  // ==== Página principal HTML ====
+  // ==== Página HTML principal ====
   server.on("/", HTTP_GET, []() {
     server.send(200, "text/html", R"rawliteral(
       <html><body>
-      <h2>ESP32 MJPEG (QVGA, 1 buffer)</h2>
+      <h2>ESP32 MJPEG Streaming (real)</h2>
       <img src="/stream" width="320">
       <br><br>
       <button onclick="fetch('/adelante')">Adelante</button>
@@ -103,15 +103,14 @@ void setup() {
     )rawliteral");
   });
 
-  // ==== Streaming MJPEG limitado ====
+  // ==== Endpoint MJPEG STREAM ====
   server.on("/stream", HTTP_GET, []() {
     WiFiClient client = server.client();
     String response = "HTTP/1.1 200 OK\r\n";
     response += "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n";
     client.print(response);
 
-    unsigned long start = millis();
-    while (client.connected() && millis() - start < 30000) {  // 30 segundos máx
+    while (client.connected()) {
       camera_fb_t *fb = esp_camera_fb_get();
       if (!fb) continue;
 
@@ -122,11 +121,11 @@ void setup() {
       client.print("\r\n");
 
       esp_camera_fb_return(fb);
-      delay(100);  // 10 FPS aprox
+      delay(33); // ~30 FPS
     }
   });
 
-  // ==== Flash LED ====
+  // ==== Controles de Flash ====
   server.on("/flash_on", HTTP_GET, []() {
     digitalWrite(FLASH_LED_PIN, HIGH);
     server.send(200, "text/plain", "Flash encendido");
@@ -137,7 +136,7 @@ void setup() {
     server.send(200, "text/plain", "Flash apagado");
   });
 
-  // ==== Movimiento ====
+  // ==== Controles de movimiento ====
   server.on("/adelante", HTTP_GET, []() {
     digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
     digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
@@ -172,5 +171,5 @@ void setup() {
 }
 
 void loop() {
-  server.handleClient();  // sigue activo
+  server.handleClient();
 }
