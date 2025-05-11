@@ -20,6 +20,7 @@ export default function App() {
   const [estadoRed, setEstadoRed] = useState({ conectado: false, modo: 'ap', ip: '' });
   const [errorCamara, setErrorCamara] = useState(false);
   const [baseUrl, setBaseUrl] = useState('http://192.168.4.1');
+  const [accionEnCurso, setAccionEnCurso] = useState(false)
 
   useEffect(() => {
     const scanIPs = async () => {
@@ -90,6 +91,18 @@ export default function App() {
     }
   };
 
+  const manejarMovimiento = (comando) => {
+    if (!accionEnCurso) {
+      setAccionEnCurso(true);
+      enviarComando(comando);
+    }
+  };
+
+  const detenerMovimiento = () => {
+    enviarComando('stop');
+    setAccionEnCurso(false);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>UTALControl</Text>
@@ -135,25 +148,49 @@ export default function App() {
 
         <View style={styles.joystick}>
           <View style={styles.joystickRow}>
-            <TouchableOpacity style={styles.arrowButton} onPress={() => enviarComando('atras')}>
-              <Text style={styles.arrowText}>↑</Text>
+            {/* manejar movimiento ahora llama a enviar Comando para usar el boolean de si se presiona o no */}
+            <TouchableOpacity
+
+                style={styles.arrowButton}
+                onPressIn={() => manejarMovimiento('atras')}
+                onPressOut={detenerMovimiento}
+                disabled = {accionEnCurso}
+            >
+              <Text style={styles.arrowText}>↓</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.joystickRow}>
-            <TouchableOpacity style={styles.arrowButton} onPress={() => enviarComando('derecha')}>
+            <TouchableOpacity
+                style={styles.arrowButton}
+                onPressIn={() => manejarMovimiento('derecha')}
+                onPressOut={detenerMovimiento}
+                disabled = {accionEnCurso}
+            >
               <Text style={styles.arrowText}>←</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.stopButton} onPress={() => enviarComando('stop')}>
+              {/* stop no necesita el boolean */}
               <Text style={styles.stopText}>STOP</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.arrowButton} onPress={() => enviarComando('izquierda')}>
+            <TouchableOpacity
+                style={styles.arrowButton}
+                onPressIn={() => manejarMovimiento('izquierda')}
+                onPressOut={detenerMovimiento}
+                disabled = {accionEnCurso}
+            >
               <Text style={styles.arrowText}>→</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.joystickRow}>
-            <TouchableOpacity style={styles.arrowButton} onPress={() => enviarComando('adelante')}>
+            <TouchableOpacity
+                style={styles.arrowButton}
+                onPressIn={() => manejarMovimiento('adelante')}
+                onPressOut={detenerMovimiento}
+                disabled = {accionEnCurso}
+            >
               <Text style={styles.arrowText}>↓</Text>
             </TouchableOpacity>
+
           </View>
         </View>
 
