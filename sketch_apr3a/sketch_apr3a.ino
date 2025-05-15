@@ -1,35 +1,33 @@
 #include <WiFi.h>
 #include <WebServer.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncTCP.h>
 #include "esp_camera.h"
+#include <Preferences.h>
+#include <ArduinoJson.h>
 
-// ======== CONFIGURACIÓN WIFI =========
-const char* ssid = "Samsung";
-const char* password = "12345678";
-
-// ======== PINES MOTORES ========
 #define IN1 12
 #define IN2 13
 #define IN3 15
 #define IN4 14
 #define ENA 2
-#define ENB 4 
-#define FLASH_LED_PIN 4  // LED blanco del ESP32-CAM
+#define ENB 4
 
-// ======== PINES CÁMARA - AI-Thinker ESP32-CAM ========
 #define CAMERA_MODEL_AI_THINKER
 #include "camera_pins.h"
 
-WebServer server(80);
+Preferences prefs;
+WebServer streamServer(81); // solo para la cámara
+AsyncWebServer server(80);  // para comandos y configuración
+AsyncWebSocket ws("/ws");
+bool modoAP = true;
 
 void detenerMotores() {
   digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
 }
 
-void setup() {
-  Serial.begin(115200);
-
-  // ==== Configuración cámara ====
+void iniciarCamara() {
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -52,124 +50,150 @@ void setup() {
   config.xclk_freq_hz = 10000000;
   config.pixel_format = PIXFORMAT_JPEG;
   config.frame_size = FRAMESIZE_QVGA;
-  config.jpeg_quality = 30;
+  config.jpeg_quality = 15;
   config.fb_count = 1;
   config.fb_location = CAMERA_FB_IN_DRAM;
   config.grab_mode = CAMERA_GRAB_LATEST;
 
-  if (esp_camera_init(&config) != ESP_OK) {
-    Serial.println("❌ Error al iniciar la cámara");
-    return;
+  esp_camera_init(&config);
+}
+
+void configurarRed() {
+  prefs.begin("wifi", true);
+  String ssid = prefs.getString("ssid", "");
+  String pass = prefs.getString("pass", "");
+  prefs.end();
+
+  if (ssid.length() > 0) {
+    WiFi.begin(ssid.c_str(), pass.c_str());
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 8000) delay(500);
+    if (WiFi.status() == WL_CONNECTED) {
+      modoAP = false;
+      return;
+    }
   }
 
-  Serial.println("✅ Cámara iniciada");
-  Serial.println(psramFound() ? "✅ PSRAM detectada" : "⚠️ Sin PSRAM, usando DRAM");
+  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
+  WiFi.softAP("ESP32-AUTO");
+  delay(500);
+  modoAP = true;
+}
 
-  // ==== Pines motores y flash ====
-  pinMode(FLASH_LED_PIN, OUTPUT);
-  digitalWrite(FLASH_LED_PIN, LOW);
+void manejarComando(const String& comando) {
+  if (comando == "adelante") {
+    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+  } else if (comando == "atras") {
+    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+  } else if (comando == "izquierda") {
+    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+  } else if (comando == "derecha") {
+    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+  } else if (comando == "stop") {
+    detenerMotores();
+  }
+}
+
+String wifiPayload = "";
+
+void setup() {
+  Serial.begin(115200);
 
   pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
   pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);
-  digitalWrite(ENA, HIGH);
-  digitalWrite(ENB, HIGH);
+  digitalWrite(ENA, HIGH); digitalWrite(ENB, HIGH);
 
-  // ==== Conexión WiFi ====
-  WiFi.begin(ssid, password);
-  WiFi.setSleep(false);
-  Serial.print("Conectando a WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500); Serial.print(".");
-  }
-  Serial.println("\n✅ Conectado a WiFi");
-  Serial.print("IP local: "); Serial.println(WiFi.localIP());
+  configurarRed();
+  iniciarCamara();
 
-  // ==== Página HTML principal ====
-  server.on("/", HTTP_GET, []() {
-    server.send(200, "text/html", R"rawliteral(
-      <html><body>
-      <h2>ESP32 MJPEG Streaming (real)</h2>
-      <img src="/stream" width="320">
-      <br><br>
-      <button onclick="fetch('/adelante')">Adelante</button>
-      <button onclick="fetch('/atras')">Atrás</button>
-      <button onclick="fetch('/izquierda')">Izquierda</button>
-      <button onclick="fetch('/derecha')">Derecha</button>
-      <button onclick="fetch('/stop')">Detener</button>
-      <button onclick="fetch('/flash_on')">Flash ON</button>
-      <button onclick="fetch('/flash_off')">Flash OFF</button>
-      </body></html>
-    )rawliteral");
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "text/plain", "ESP32 ready");
   });
 
-  // ==== Endpoint MJPEG STREAM ====
-  server.on("/stream", HTTP_GET, []() {
-    WiFiClient client = server.client();
-    String response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n";
-    client.print(response);
+  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
+    DynamicJsonDocument doc(128);
+    doc["connected"] = WiFi.status() == WL_CONNECTED;
+    doc["mode"] = modoAP ? "ap" : "sta";
+    IPAddress ipAddr = modoAP ? WiFi.softAPIP() : WiFi.localIP();
+    doc["ip"] = ipAddr.toString();
+    Serial.print("[STATUS] IP: "); Serial.println(ipAddr);
+    String json;
+    serializeJson(doc, json);
+    request->send(200, "application/json", json);
+  });
 
+  server.on("/config_wifi", HTTP_POST, [](AsyncWebServerRequest *request){
+    DynamicJsonDocument doc(256);
+    DeserializationError error = deserializeJson(doc, wifiPayload);
+    if (error) {
+      request->send(400, "text/plain", "JSON inválido");
+      return;
+    }
+    String ssid = doc["ssid"];
+    String pass = doc["pass"];
+
+    prefs.begin("wifi", false);
+    prefs.putString("ssid", ssid);
+    prefs.putString("pass", pass);
+    prefs.end();
+
+    request->send(200, "text/plain", "Credenciales guardadas. Reinicia manualmente para aplicar.");
+    wifiPayload = "";
+  });
+
+  server.onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    wifiPayload = "";
+    for (size_t i = 0; i < len; i++) wifiPayload += (char)data[i];
+  });
+
+  server.on("/reset_wifi", HTTP_GET, [](AsyncWebServerRequest *request){
+    prefs.begin("wifi", false);
+    prefs.clear();
+    prefs.end();
+    request->send(200, "text/plain", "Credenciales eliminadas. Reiniciando en modo AP...");
+    delay(1000);
+    ESP.restart();
+  });
+
+  ws.onEvent([](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+    if (type == WS_EVT_DATA) {
+      String msg = "";
+      for (size_t i = 0; i < len; i++) msg += (char)data[i];
+      Serial.printf("[WS ASYNC] Comando recibido: %s\n", msg.c_str());
+      manejarComando(msg);
+      client->text("ACK: " + msg);
+    }
+  });
+
+  server.addHandler(&ws);
+  server.begin();
+
+  streamServer.on("/stream", HTTP_GET, []() {
+    WiFiClient client = streamServer.client();
+    String response =
+      "HTTP/1.1 200 OK\r\n"
+      "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n";
+    client.print(response);
     while (client.connected()) {
       camera_fb_t *fb = esp_camera_fb_get();
-      if (!fb) continue;
+      if (!fb) break;
 
-      client.printf("--frame\r\n");
-      client.printf("Content-Type: image/jpeg\r\n");
-      client.printf("Content-Length: %u\r\n\r\n", fb->len);
+      client.printf("--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n", fb->len);
       client.write(fb->buf, fb->len);
       client.print("\r\n");
 
       esp_camera_fb_return(fb);
-      delay(33); // ~30 FPS
+      delay(33);
     }
   });
-
-  // ==== Controles de Flash ====
-  server.on("/flash_on", HTTP_GET, []() {
-    digitalWrite(FLASH_LED_PIN, HIGH);
-    server.send(200, "text/plain", "Flash encendido");
-  });
-
-  server.on("/flash_off", HTTP_GET, []() {
-    digitalWrite(FLASH_LED_PIN, LOW);
-    server.send(200, "text/plain", "Flash apagado");
-  });
-
-  // ==== Controles de movimiento ====
-  server.on("/adelante", HTTP_GET, []() {
-    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
-    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
-    server.send(200, "text/plain", "Avanzando");
-  });
-
-  server.on("/atras", HTTP_GET, []() {
-    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
-    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
-    server.send(200, "text/plain", "Retrocediendo");
-  });
-
-  server.on("/izquierda", HTTP_GET, []() {
-    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
-    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
-    server.send(200, "text/plain", "Giro izquierda");
-  });
-
-  server.on("/derecha", HTTP_GET, []() {
-    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
-    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
-    server.send(200, "text/plain", "Giro derecha");
-  });
-
-  server.on("/stop", HTTP_GET, []() {
-    detenerMotores();
-    server.send(200, "text/plain", "Detenido");
-  });
-
-  server.begin();
-  Serial.println("✅ Servidor HTTP iniciado");
+  streamServer.begin();
 }
 
 void loop() {
-  server.handleClient();
+  streamServer.handleClient();
 }
