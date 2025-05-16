@@ -1,5 +1,6 @@
 {
   "expo": {
+    "owner": "autos8choa",
     "name": "auto-control-app",
     "slug": "auto-control-app",
     "version": "1.0.0",
