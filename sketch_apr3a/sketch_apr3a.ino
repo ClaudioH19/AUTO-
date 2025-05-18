@@ -17,14 +17,69 @@
 #include "camera_pins.h"
 
 Preferences prefs;
-WebServer streamServer(81); // solo para la cámara
-AsyncWebServer server(80);  // para comandos y configuración
+WebServer streamServer(81);
+AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 bool modoAP = true;
+String wifiPayload = "";
+unsigned long ultimoEstado = 0;
+
+void enviarEstado(AsyncWebSocketClient *client = nullptr) {
+  DynamicJsonDocument doc(128);
+  doc["type"] = "status";
+  doc["connected"] = WiFi.status() == WL_CONNECTED;
+  doc["mode"] = modoAP ? "ap" : "sta";
+  IPAddress ip = modoAP ? WiFi.softAPIP() : WiFi.localIP();
+  doc["ip"] = ip.toString();
+  String msg;
+  serializeJson(doc, msg);
+  if (client) client->text(msg);
+  else ws.textAll(msg);
+}
 
 void detenerMotores() {
   digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
+}
+
+void manejarComando(const String& cmd) {
+  if (cmd == "adelante") {
+    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+  } else if (cmd == "atras") {
+    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+  } else if (cmd == "izquierda") {
+    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+  } else if (cmd == "derecha") {
+    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+  } else if (cmd == "stop") {
+    detenerMotores();
+  }
+}
+
+void configurarRed() {
+  prefs.begin("wifi", true);
+  String ssid = prefs.getString("ssid", "");
+  String pass = prefs.getString("pass", "");
+  prefs.end();
+
+  if (ssid.length() > 0) {
+    WiFi.begin(ssid.c_str(), pass.c_str());
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 8000) delay(500);
+    if (WiFi.status() == WL_CONNECTED) {
+      modoAP = false;
+      return;
+    }
+  }
+
+  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
+  WiFi.softAP("ESP32-AUTO");
+  delay(500);
+  modoAP = true;
 }
 
 void iniciarCamara() {
@@ -58,51 +113,8 @@ void iniciarCamara() {
   esp_camera_init(&config);
 }
 
-void configurarRed() {
-  prefs.begin("wifi", true);
-  String ssid = prefs.getString("ssid", "");
-  String pass = prefs.getString("pass", "");
-  prefs.end();
-
-  if (ssid.length() > 0) {
-    WiFi.begin(ssid.c_str(), pass.c_str());
-    unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 8000) delay(500);
-    if (WiFi.status() == WL_CONNECTED) {
-      modoAP = false;
-      return;
-    }
-  }
-
-  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
-  WiFi.softAP("ESP32-AUTO");
-  delay(500);
-  modoAP = true;
-}
-
-void manejarComando(const String& comando) {
-  if (comando == "adelante") {
-    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
-    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
-  } else if (comando == "atras") {
-    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
-    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
-  } else if (comando == "izquierda") {
-    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
-    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
-  } else if (comando == "derecha") {
-    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
-    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
-  } else if (comando == "stop") {
-    detenerMotores();
-  }
-}
-
-String wifiPayload = "";
-
 void setup() {
   Serial.begin(115200);
-
   pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
   pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);
@@ -111,60 +123,34 @@ void setup() {
   configurarRed();
   iniciarCamara();
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(200, "text/plain", "ESP32 ready");
+  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *req) {
+    enviarEstado(); req->send(200, "application/json", "{}"); // opcional
   });
 
-  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request){
-    DynamicJsonDocument doc(128);
-    doc["connected"] = WiFi.status() == WL_CONNECTED;
-    doc["mode"] = modoAP ? "ap" : "sta";
-    IPAddress ipAddr = modoAP ? WiFi.softAPIP() : WiFi.localIP();
-    doc["ip"] = ipAddr.toString();
-    Serial.print("[STATUS] IP: "); Serial.println(ipAddr);
-    String json;
-    serializeJson(doc, json);
-    request->send(200, "application/json", json);
-  });
-
-  server.on("/config_wifi", HTTP_POST, [](AsyncWebServerRequest *request){
+  server.on("/config_wifi", HTTP_POST, [](AsyncWebServerRequest *req) {
     DynamicJsonDocument doc(256);
-    DeserializationError error = deserializeJson(doc, wifiPayload);
-    if (error) {
-      request->send(400, "text/plain", "JSON inválido");
-      return;
-    }
-    String ssid = doc["ssid"];
-    String pass = doc["pass"];
-
+    deserializeJson(doc, wifiPayload);
+    String ssid = doc["ssid"], pass = doc["pass"];
     prefs.begin("wifi", false);
     prefs.putString("ssid", ssid);
     prefs.putString("pass", pass);
     prefs.end();
-
-    request->send(200, "text/plain", "Credenciales guardadas. Reinicia manualmente para aplicar.");
+    req->send(200, "text/plain", "OK");
     wifiPayload = "";
   });
 
-  server.onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+  server.onRequestBody([](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t index, size_t total) {
     wifiPayload = "";
     for (size_t i = 0; i < len; i++) wifiPayload += (char)data[i];
   });
 
-  server.on("/reset_wifi", HTTP_GET, [](AsyncWebServerRequest *request){
-    prefs.begin("wifi", false);
-    prefs.clear();
-    prefs.end();
-    request->send(200, "text/plain", "Credenciales eliminadas. Reiniciando en modo AP...");
-    delay(1000);
-    ESP.restart();
-  });
-
   ws.onEvent([](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
-    if (type == WS_EVT_DATA) {
+    if (type == WS_EVT_CONNECT) {
+      Serial.println("[WS] Cliente conectado");
+      enviarEstado(client);
+    } else if (type == WS_EVT_DATA) {
       String msg = "";
       for (size_t i = 0; i < len; i++) msg += (char)data[i];
-      Serial.printf("[WS ASYNC] Comando recibido: %s\n", msg.c_str());
       manejarComando(msg);
       client->text("ACK: " + msg);
     }
@@ -175,18 +161,13 @@ void setup() {
 
   streamServer.on("/stream", HTTP_GET, []() {
     WiFiClient client = streamServer.client();
-    String response =
-      "HTTP/1.1 200 OK\r\n"
-      "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n";
-    client.print(response);
+    client.print("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n");
     while (client.connected()) {
       camera_fb_t *fb = esp_camera_fb_get();
       if (!fb) break;
-
       client.printf("--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n", fb->len);
       client.write(fb->buf, fb->len);
       client.print("\r\n");
-
       esp_camera_fb_return(fb);
       delay(33);
     }
@@ -196,4 +177,8 @@ void setup() {
 
 void loop() {
   streamServer.handleClient();
+  if (millis() - ultimoEstado > 5000) {
+    enviarEstado();
+    ultimoEstado = millis();
+  }
 }

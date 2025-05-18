@@ -37,62 +37,58 @@ export default function App() {
           setEstadoRed({ conectado: true, modo: data.mode, ip: data.ip });
           return;
         }
-      } catch (e) { continue; }
+      } catch (e) {
+        continue;
+      }
     }
   };
 
   useEffect(() => {
     scanIPs();
-    const interval = setInterval(() => {
-      fetch(`${baseUrl}/status`, { timeout: 1500 })
-        .then(res => res.json())
-        .then(data => {
+  }, []);
+
+  useEffect(() => {
+    if (!baseUrl) return;
+
+    const socketUrl = baseUrl.replace('http://', 'ws://').replace(/\/$/, '') + '/ws';
+    console.log('Intentando conectar a:', socketUrl);
+
+    const socket = new WebSocket(socketUrl);
+
+    socket.onopen = () => {
+      console.log('✅ WebSocket conectado');
+      setWs(socket);
+    };
+
+    socket.onmessage = (event) => {
+      console.log('📩 Mensaje del ESP32:', event.data);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'status') {
           if (!ipManualActiva && data.ip) setBaseUrl(`http://${data.ip}`);
           setEstadoRed({
             conectado: data.connected || data.mode === 'ap',
             modo: data.mode,
             ip: data.ip || ''
           });
-        })
-        .catch(() => {
-          if (!ipManualActiva) {
-            setEstadoRed(prev => ({ ...prev, conectado: prev.modo === 'ap' }));
-          }
-        });
-    }, 5000);
-    return () => clearInterval(interval);
+        }
+      } catch (e) {
+        console.warn('⚠️ Mensaje WebSocket no válido:', event.data);
+      }
+    };
+
+    socket.onerror = (e) => {
+      console.error('❌ WebSocket error:', e.message);
+    };
+
+    socket.onclose = () => {
+      console.warn('⚠️ WebSocket desconectado');
+    };
+
+    return () => {
+      socket.close();
+    };
   }, [baseUrl, ipManualActiva]);
-
-  useEffect(() => {
-  if (!baseUrl) return;
-
-  // Asegúrate de que la IP no tenga slash final y reemplace http por ws
-  const socketUrl = baseUrl.replace('http://', 'ws://').replace(/\/$/, '') + '/ws';
-  console.log('Intentando conectar a:', socketUrl);
-
-  const socket = new WebSocket(socketUrl);
-
-  socket.onopen = () => {
-    console.log('✅ WebSocket conectado');
-    setWs(socket);
-  };
-
-  socket.onmessage = (event) => {
-    console.log('📩 Mensaje del ESP32:', event.data);
-  };
-
-  socket.onerror = (e) => {
-    console.error('❌ WebSocket error:', e.message);
-  };
-
-  socket.onclose = () => {
-    console.warn('⚠️ WebSocket desconectado');
-  };
-
-  return () => {
-    socket.close();
-  };
-}, [baseUrl]);
 
   const enviarComando = (comando) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
