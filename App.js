@@ -1,27 +1,16 @@
+// App completa con IP manual en modal separado
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  StyleSheet,
-  SafeAreaView,
-  Alert,
-  ActivityIndicator
+  View, Text, TouchableOpacity, Modal, TextInput, StyleSheet,
+  SafeAreaView, Alert, ActivityIndicator
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import Feather from 'react-native-vector-icons/Feather';
 
-/* ────────────────────────────────────── */
-/*  COMPONENTE PRINCIPAL                  */
-/* ────────────────────────────────────── */
 export default function App() {
-  /* ─── Estados de UI ─────────────────── */
   const [modalWifiVisible, setModalWifiVisible] = useState(false);
   const [modalScanVisible, setModalScanVisible] = useState(false);
-
-  /* ─── Estados de conexión ───────────── */
+  const [modalIpVisible, setModalIpVisible] = useState(false);
   const [ssid, setSsid] = useState('');
   const [password, setPassword] = useState('');
   const [estadoRed, setEstadoRed] = useState({ conectado: false, modo: 'ap', ip: '' });
@@ -29,43 +18,28 @@ export default function App() {
   const [conexionLista, setConexionLista] = useState(false);
   const [ipManual, setIpManual] = useState('');
   const [ipManualActiva, setIpManualActiva] = useState(false);
-
-  /* ─── Estados de control UI ─────────── */
   const [camaraActiva, setCamaraActiva] = useState(true);
   const [errorCamara, setErrorCamara] = useState(false);
   const [accionEnCurso, setAccionEnCurso] = useState(false);
-
-  /* ─── Escaneo ───────────────────────── */
   const [ipActualEscaneo, setIpActualEscaneo] = useState('');
   const stopScan = useRef(false);
-
-  /* ─── WebSocket ─────────────────────── */
   const ws = useRef(null);
 
-  /* ────────────────────────────────────── */
-  /*  Funciones                            */
-  /* ────────────────────────────────────── */
-  /* Escaneo de subred */
   const scanIPs = async () => {
     if (ipManualActiva) return;
     stopScan.current = false;
     setModalScanVisible(true);
-
-    const subnet = '192.168.1';          // Ajusta si tu red cambia
+    const subnet = '192.168.1';
     const timeoutMs = 1000;
-
     for (let i = 1; i <= 254; i++) {
       if (stopScan.current) break;
-
       const ip = `${subnet}.${i}`;
       setIpActualEscaneo(ip);
-
       try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), timeoutMs);
         const res = await fetch(`http://${ip}/status`, { signal: controller.signal });
         clearTimeout(t);
-
         const data = await res.json();
         if (data?.ip && data?.mode) {
           setBaseUrl(`http://${data.ip}`);
@@ -73,12 +47,11 @@ export default function App() {
           setConexionLista(true);
           break;
         }
-      } catch { /* silencio */ }
+      } catch {}
     }
     setModalScanVisible(false);
   };
 
-  /* Reinicio total de la app */
   const reiniciarAplicacion = () => {
     stopScan.current = true;
     if (ws.current) {
@@ -97,90 +70,116 @@ export default function App() {
     setCamaraActiva(true);
   };
 
-  /* Enviar credenciales WiFi */
   const enviarCredencialesWiFi = async () => {
-    try {
-      await fetch(`${baseUrl}/config_wifi`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ssid, pass: password })
-      });
+  // Validar que no estén vacías
+  if (!ssid.trim() || !password.trim()) {
+    Alert.alert('Error', 'SSID y contraseña no pueden estar vacíos');
+    return;
+  }
+
+  console.log('Enviando credenciales:');
+  console.log('SSID:', ssid);
+  console.log('Password:', password);
+  console.log('URL:', `${baseUrl}/config_wifi`);
+
+  try {
+    const requestBody = JSON.stringify({ ssid: ssid.trim(), pass: password.trim() });
+    console.log('Body enviado:', requestBody);
+
+    const response = await fetch(`${baseUrl}/config_wifi`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json'
+      },
+      body: requestBody
+    });
+
+    console.log('Status response:', response.status);
+    const responseText = await response.text();
+    console.log('Response:', responseText);
+
+    if (response.ok) {
       Alert.alert('Reiniciando', 'Espera 10 s mientras cambia de red...');
       setModalWifiVisible(false);
-
+      setSsid(''); // Limpiar campos
+      setPassword('');
+      
       setTimeout(() => {
         if (!ipManualActiva) scanIPs();
         setIpManualActiva(false);
         setConexionLista(true);
       }, 10000);
+    } else {
+      Alert.alert('Error', `Error del servidor: ${response.status}`);
+    }
+  } catch (error) {
+    console.log('Error:', error);
+    Alert.alert('Error', 'No se pudo conectar al auto');
+  }
+};
+
+  const resetearWiFi = async () => {
+    try {
+      await fetch(`${baseUrl}/reset_wifi`);
+      Alert.alert('Reinicio', 'Credenciales eliminadas. El auto volverá al modo AP.');
+      reiniciarAplicacion();
     } catch {
-      Alert.alert('Error', 'No se pudo conectar al auto');
+      Alert.alert('Error', 'No se pudo comunicar con el auto para resetear WiFi.');
     }
   };
 
-  /* Control de movimientos */
   const enviarComando = (cmd) => {
     if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(cmd);
   };
-  const manejarMovimiento = (cmd) => !accionEnCurso && (setAccionEnCurso(true), enviarComando(cmd));
-  const detenerMovimiento  = () => (enviarComando('stop'), setAccionEnCurso(false));
 
-  /* ────────────────────────────────────── */
-  /*  Efecto WebSocket                      */
-  /* ────────────────────────────────────── */
+  const manejarMovimiento = (cmd) => !accionEnCurso && (setAccionEnCurso(true), enviarComando(cmd));
+  const detenerMovimiento = () => (enviarComando('stop'), setAccionEnCurso(false));
+
   useEffect(() => {
     if (!conexionLista) return;
-
     const socketUrl = baseUrl.replace('http://', 'ws://').replace(/\/$/, '') + '/ws';
     if (ws.current) { ws.current.onclose = null; ws.current.close(); }
     const socket = new WebSocket(socketUrl);
     ws.current = socket;
-
     socket.onclose = () => setTimeout(() => {
       if (ws.current === socket) { setConexionLista(false); setTimeout(() => setConexionLista(true), 100); }
     }, 3000);
     return () => { if (ws.current === socket) socket.close(); };
   }, [baseUrl, conexionLista]);
 
-  /* ────────────────────────────────────── */
-  /*  Render                               */
-  /* ────────────────────────────────────── */
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>UTALControl</Text>
 
-      {/* Panel principal */}
       <View style={styles.panel}>
-        {/* Cámara */}
         <View style={styles.cameraView}>
           {camaraActiva ? (
-            errorCamara
-              ? <Text style={styles.cameraText}>❌ No se pudo cargar la cámara.</Text>
-              : <WebView
-                  source={{ uri: `${baseUrl}:81/stream` }}
-                  style={{
-                    height: '100%',
-                    width: '100%',
-                    transform: [{ rotate: '90deg' }],
-                    backgroundColor: '#000',
-                  }}
-                  onError={() => setErrorCamara(true)}
-                  onLoadStart={() => setErrorCamara(false)}
-                />
-          ) : <Text style={styles.cameraText}>Cámara apagada</Text>}
+            errorCamara ? (
+              <Text style={styles.cameraText}>❌ No se pudo cargar la cámara.</Text>
+            ) : (
+              <WebView
+                source={{ uri: `${baseUrl}:81/stream` }}
+                style={{ height: '100%', width: '100%', transform: [{ rotate: '90deg' }], backgroundColor: '#000' }}
+                originWhitelist={['*']}
+                javaScriptEnabled
+                domStorageEnabled
+                allowsInlineMediaPlayback
+                mediaPlaybackRequiresUserAction={false}
+                onError={() => setErrorCamara(true)}
+                onHttpError={() => setErrorCamara(true)}
+                onLoadStart={() => setErrorCamara(false)}
+              />
+            )
+          ) : (
+            <Text style={styles.cameraText}>Cámara apagada</Text>
+          )}
         </View>
 
-        {/* Estado + iconos */}
         <View style={styles.connectionRow}>
           <View style={styles.statusRow}>
-            <View style={[
-              styles.statusDot,
-              { backgroundColor: estadoRed.conectado ? '#10b981' : '#ef4444' }
-            ]}/>
+            <View style={[styles.statusDot, { backgroundColor: estadoRed.conectado ? '#10b981' : '#ef4444' }]} />
             <Text style={styles.statusText}>
-              {estadoRed.conectado
-                ? `Conectado (${estadoRed.modo})\n IP: ${estadoRed.ip}`
-                : `Sin conexión (${estadoRed.modo})`}
+              {estadoRed.conectado ? `Conectado (${estadoRed.modo})\n IP: ${estadoRed.ip}` : `Sin conexión (${estadoRed.modo})`}
             </Text>
           </View>
 
@@ -188,7 +187,7 @@ export default function App() {
             <TouchableOpacity onPress={reiniciarAplicacion}>
               <Feather name="refresh-ccw" size={24} color="#b91c1c" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={scanIPs}>
+            <TouchableOpacity onPress={() => setModalIpVisible(true)}>
               <Feather name="search" size={24} color="#b91c1c" />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setModalWifiVisible(true)}>
@@ -197,42 +196,76 @@ export default function App() {
           </View>
         </View>
 
-        {/* Joystick */}
         <View style={styles.joystick}>
           <View style={styles.joystickRow}>
-            <TouchableOpacity style={styles.arrowButton}
-              onPressIn={() => manejarMovimiento('atras')}
-              onPressOut={detenerMovimiento}><Text style={styles.arrowText}>↑</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.arrowButton} onPressIn={() => manejarMovimiento('atras')} onPressOut={detenerMovimiento}>
+              <Text style={styles.arrowText}>↑</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.joystickRow}>
-            <TouchableOpacity style={styles.arrowButton}
-              onPressIn={() => manejarMovimiento('derecha')}
-              onPressOut={detenerMovimiento}><Text style={styles.arrowText}>←</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.arrowButton} onPressIn={() => manejarMovimiento('derecha')} onPressOut={detenerMovimiento}>
+              <Text style={styles.arrowText}>←</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.stopButton} onPress={detenerMovimiento}>
-              <Text style={styles.stopText}>STOP</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.arrowButton}
-              onPressIn={() => manejarMovimiento('izquierda')}
-              onPressOut={detenerMovimiento}><Text style={styles.arrowText}>→</Text></TouchableOpacity>
+              <Text style={styles.stopText}>STOP</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.arrowButton} onPressIn={() => manejarMovimiento('izquierda')} onPressOut={detenerMovimiento}>
+              <Text style={styles.arrowText}>→</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.joystickRow}>
-            <TouchableOpacity style={styles.arrowButton}
-              onPressIn={() => manejarMovimiento('adelante')}
-              onPressOut={detenerMovimiento}><Text style={styles.arrowText}>↓</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.arrowButton} onPressIn={() => manejarMovimiento('adelante')} onPressOut={detenerMovimiento}>
+              <Text style={styles.arrowText}>↓</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
 
-      {/* Modal WiFi */}
+      {/* Modal de Configuración WiFi */}
       <Modal visible={modalWifiVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Configurar WiFi</Text>
-            <TextInput placeholder="SSID" style={styles.input} value={ssid} onChangeText={setSsid}/>
-            <TextInput placeholder="Contraseña" secureTextEntry style={styles.input}
-              value={password} onChangeText={setPassword}/>
-            <TextInput placeholder="IP manual (ej. 192.168.1.100)" style={styles.input}
-              value={ipManual} onChangeText={setIpManual}/>
-            <TouchableOpacity style={styles.infoButton} onPress={() => {
+            <TextInput placeholder="SSID" style={styles.input} value={ssid} onChangeText={setSsid} />
+            <TextInput placeholder="Contraseña" secureTextEntry style={styles.input} value={password} onChangeText={setPassword} />
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity style={styles.botonPrimario} onPress={enviarCredencialesWiFi}>
+                <Text style={styles.botonPrimarioTexto}>Guardar y Reiniciar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.botonSecundario} onPress={resetearWiFi}>
+                <Text style={styles.botonSecundarioTexto}>Restablecer red</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.botonTerciario} onPress={() => setModalWifiVisible(false)}>
+                <Text style={styles.botonTerciarioTexto}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Escaneo */}
+      <Modal visible={modalScanVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Escaneando red…</Text>
+            <ActivityIndicator size="large" color="#b91c1c" />
+            <Text style={{ marginTop: 12, fontSize: 14, color: '#374151' }}>
+              IP actual: {ipActualEscaneo}
+            </Text>
+            <TouchableOpacity style={[styles.infoButton, { marginTop: 20 }]} onPress={() => { stopScan.current = true; setModalScanVisible(false); }}>
+              <Text style={styles.infoButtonText}>Cancelar escaneo</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal IP manual */}
+      <Modal visible={modalIpVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>IP Manual</Text>
+            <TextInput placeholder="IP manual (ej. 192.168.1.100)" style={styles.input} value={ipManual} onChangeText={setIpManual} />
+            <TouchableOpacity style={styles.botonPrimario} onPress={() => {
               const ip = ipManual.trim();
               if (!ip) return;
               const url = ip.startsWith('http') ? ip : `http://${ip}`;
@@ -242,34 +275,12 @@ export default function App() {
               setConexionLista(true);
               setIpManual('');
               Alert.alert('IP actualizada', url);
+              setModalIpVisible(false);
             }}>
-              <Text style={styles.infoButtonText}>Aplicar IP manual</Text>
+              <Text style={styles.botonPrimarioTexto}>Aplicar IP manual</Text>
             </TouchableOpacity>
-
-            <View style={{ flexDirection:'row',justifyContent:'space-between',marginTop:14 }}>
-              <TouchableOpacity onPress={() => setModalWifiVisible(false)}>
-                <Text style={styles.modalCloseText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={enviarCredencialesWiFi}>
-                <Text style={styles.modalCloseText}>Guardar y Reiniciar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal Escaneo */}
-      <Modal visible={modalScanVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Escaneando red…</Text>
-            <ActivityIndicator size="large" color="#b91c1c"/>
-            <Text style={{ marginTop:12,fontSize:14,color:'#374151' }}>
-              IP actual: {ipActualEscaneo}
-            </Text>
-            <TouchableOpacity style={[styles.infoButton,{marginTop:20}]}
-              onPress={() => { stopScan.current = true; setModalScanVisible(false); }}>
-              <Text style={styles.infoButtonText}>Cancelar escaneo</Text>
+            <TouchableOpacity style={styles.botonTerciario} onPress={() => setModalIpVisible(false)}>
+              <Text style={styles.botonTerciarioTexto}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -441,4 +452,43 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 14,
   },
+  modalButtonContainer: {
+  marginTop: 20,
+  gap: 12,
+},
+
+botonPrimario: {
+  backgroundColor: '#b91c1c',
+  paddingVertical: 12,
+  borderRadius: 9999,
+  alignItems: 'center',
+  marginTop: 15,
+},
+botonPrimarioTexto: {
+  color: '#ffffff',
+  fontWeight: 'bold',
+  fontSize: 14,
+},
+
+botonSecundario: {
+  backgroundColor: '#6b7280',
+  paddingVertical: 12,
+  borderRadius: 9999,
+  alignItems: 'center',
+},
+botonSecundarioTexto: {
+  color: '#ffffff',
+  fontWeight: 'bold',
+  fontSize: 14,
+},
+
+botonTerciario: {
+  paddingVertical: 10,
+  alignItems: 'center',
+},
+botonTerciarioTexto: {
+  color: '#b91c1c',
+  fontWeight: 'bold',
+  fontSize: 14,
+},
 });
