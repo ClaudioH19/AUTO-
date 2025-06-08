@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Descargar UTALControl</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+        }
+        .container {
+            background: #fff;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+            max-width: 420px;
+            text-align: center;
+        }
+        .logo {
+            width: 120px;
+            margin-bottom: 1rem;
+        }
+        h1 {
+            color: #b91c1c;
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        a.download-btn {
+            background-color: #b91c1c;
+            color: white;
+            text-decoration: none;
+            padding: 0.9rem 1.6rem;
+            border-radius: 8px;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 1rem;
+        }
+        .notes {
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            color: #4b5563;
+            line-height: 1.5;
+        }
+        .qr {
+            margin-top: 1.5rem;
+        }
+        .qr img {
+            width: 160px;
+            height: 160px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <img src="https://imgur.com/2in5L4U.png" alt="UTALControl Logo" class="logo">
+    <h1>UTALControl</h1>
+    <p>Descarga la app oficial para controlar tu auto ESP32 con cámara integrada.</p>
+
+    <a href="UTALControl_v1.0.apk" download class="download-btn">⬇ Descargar APK v1.0</a>
+
+    <div class="notes">
+        <p>Si Android muestra “Instalación bloqueada”, toca <strong>Configuración → Permitir desde esta fuente</strong> y vuelve a intentar.</p>
+        <p>Compatible con Android 7 o superior.</p>
+    </div>
+
+    <div class="qr">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://tudominio.com/UTALControl_v1.0.apk" alt="Código QR de descarga">
+        <p style="font-size: 0.8rem; color: #6b7280;">Escanéalo desde tu teléfono</p>
+    </div>
+</div>
+</body>
+</html>

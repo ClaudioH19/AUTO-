@@ -1,0 +1,3 @@
+// solo servir con python desde este directorio
+python -m http.server 3000
+// y acceder al localhost:3000
