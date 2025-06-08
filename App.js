@@ -136,6 +136,40 @@ export default function App() {
   const detenerMovimiento = () => (enviarComando('stop'), setAccionEnCurso(false));
 
   useEffect(() => {
+  let intervalo;
+
+  const intentarConexionModoAP = async () => {
+    if (conexionLista) return; // Ya está conectado, no sigas intentando
+
+    try {
+      const res = await fetch('http://192.168.4.1/status', { timeout: 1500 });
+      const data = await res.json();
+      if (data?.ip && data?.mode) {
+        console.log("📡 ESP32 en modo AP detectado automáticamente");
+        setBaseUrl('http://192.168.4.1');
+        setEstadoRed({ conectado: true, modo: data.mode, ip: data.ip });
+        setConexionLista(true);
+        clearInterval(intervalo); // Detener intentos
+      }
+    } catch (e) {
+      console.log("⏳ Aún no se detecta ESP32 AP:", e.message || e);
+    }
+  };
+
+  // Ejecutar primero una vez al montar
+  intentarConexionModoAP();
+
+  // Luego repetir cada 5 segundos
+  intervalo = setInterval(() => {
+    intentarConexionModoAP();
+  }, 5000);
+
+  // Limpieza
+  return () => clearInterval(intervalo);
+}, [conexionLista]);
+
+
+  useEffect(() => {
     if (!conexionLista) return;
     const socketUrl = baseUrl.replace('http://', 'ws://').replace(/\/$/, '') + '/ws';
     if (ws.current) { ws.current.onclose = null; ws.current.close(); }

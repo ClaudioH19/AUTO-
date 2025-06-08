@@ -39,7 +39,7 @@ function startMJPEGStreamCapture(IP, port = 81) {
         if (jpegBuffer.length < 2000) continue;
 
         const now = Date.now();
-        if (!startMJPEGStreamCapture.lastCapture || now - startMJPEGStreamCapture.lastCapture >= 2500) {
+        if (!startMJPEGStreamCapture.lastCapture || now - startMJPEGStreamCapture.lastCapture >= 3500) {
         sharp(jpegBuffer)
             .rotate(90) // o 180, 270 según sea necesario
             .toBuffer()
@@ -50,6 +50,13 @@ function startMJPEGStreamCapture(IP, port = 81) {
                 buffer: rotatedBuffer,
                 ts: now,
             });
+
+            // Guardar imagen para YOLO
+            const fs = require('fs');
+            const path = require('path');
+            const outputPath = path.join(__dirname, 'captura.jpg');
+            fs.writeFileSync(outputPath, rotatedBuffer);
+
             startMJPEGStreamCapture.lastCapture = now;
             console.log(`📸 Imagen capturada y rotada (${nextId - 1})`);
             })
