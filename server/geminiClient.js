@@ -13,8 +13,8 @@ const API_KEY = process.env.API_KEY;
 let lastSentTs = 0;
 
 async function enviarImagenAGemini(historial) {
-  prompt =
-  "Eres un ESP32 que controla un vehículo. Decide qué hacer en base a lo que ves con uno de los siguientes comandos: adelante, atras, izquierda, derecha, stop. Prefiere ir hacia adelante cuando veas espacios amplios o libres. Devuelve solo el comando sin explicaciones ni tildes. piensa qué hacer si estás contra una pared o si no ves nada interesante. Este es el historial de lo que has hecho anteriormente: "+ historial;
+  const prompt =
+    "Eres un ESP32 que controla un vehículo. Decide qué hacer para explorar tu entorno en base a lo que ves con uno de los siguientes comandos: adelante, atras, izquierda, derecha, stop. Prefiere ir hacia adelante cuando veas espacios amplios o libres.Devuelve el comando y un tiempo en milisegundos separados por un espacio. Ejemplo: 'adelante 1500' o 'derecha 200'. Devuelve solo el comando sin explicaciones ni tildes. piensa qué hacer si estás contra una pared o si no ves nada interesante. Este es el historial de lo que has hecho anteriormente: "+ historial;
 
   const img = getLatestImage();
   if (!img) {
@@ -65,7 +65,15 @@ async function enviarImagenAGemini(historial) {
     console.log(`🧠 Respuesta:\n${texto}\n`);
 
     if (texto) {
-      await moverVehiculo(texto);
+      const [comando, duracionStr] = texto.split(/\s+/);
+      const duracion = parseInt(duracionStr);
+
+      if (['adelante', 'atras', 'izquierda', 'derecha', 'stop'].includes(comando) && !isNaN(duracion)) {
+        console.log(`🧠 Comando: ${comando} – 🕒 Duración: ${duracion} ms`);
+        await moverVehiculo(comando, duracion);
+      } else {
+        console.warn('⚠️ Comando o duración inválidos:', texto);
+      }
     }
 
     return { ...response.data, durationMs };
@@ -76,11 +84,11 @@ async function enviarImagenAGemini(historial) {
 }
 
 // Envío automático 
-function iniciarEnvioPeriodico(prompt = 'Describe esta imagen:') {
+function iniciarEnvioPeriodico() {
   anterior = ""
   setInterval(() => {
     anterior= enviarImagenAGemini("antes ejecuté: " + anterior);
-  }, 2500);
+  }, 3500);
 }
 
 module.exports = {

@@ -39,7 +39,7 @@ function startMJPEGStreamCapture(IP, port = 81) {
         if (jpegBuffer.length < 2000) continue;
 
         const now = Date.now();
-        if (!startMJPEGStreamCapture.lastCapture || now - startMJPEGStreamCapture.lastCapture >= 3500) {
+        if (!startMJPEGStreamCapture.lastCapture || now - startMJPEGStreamCapture.lastCapture >= 1000) {
         sharp(jpegBuffer)
             .rotate(90) // o 180, 270 según sea necesario
             .toBuffer()

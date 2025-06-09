@@ -38,7 +38,7 @@ function conectarWebSocket() {
   });
 }
 
-async function moverVehiculo(comando) {
+async function moverVehiculo(comando, duracion) {
   comando = comando.trim().toLowerCase();
 
   if (!comandosValidos.includes(comando)) {
@@ -58,7 +58,7 @@ async function moverVehiculo(comando) {
   console.log(`🚗 Comando corregido enviado: '${comando}' → '${comandoFinal}'`);
 
   //tiempo entr 0.2 y 1 segundo
-  const tiempoEspera = Math.floor(Math.random() * 800) + 200; // Entre 200 y 1000 ms
+  const tiempoEspera = duracion;
   if (comandoFinal !== 'stop') {
     setTimeout(() => {
       if (ws && ws.readyState === WebSocket.OPEN) {
