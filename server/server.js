@@ -12,7 +12,7 @@ const { iniciarEnvioPeriodico } = require('./geminiClient');
 
 const app = express();
 const PORT = 3000;
-const IP_ESP32 = '192.168.13.223';
+const IP_ESP32 = '192.168.225.223';
 
 app.use(cors());
 

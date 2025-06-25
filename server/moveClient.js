@@ -1,6 +1,6 @@
 const WebSocket = require('ws');
 
-const ESP32_WS_URL = 'ws://192.168.13.223/ws'; // Ajusta IP si cambia
+const ESP32_WS_URL = 'ws://192.168.225.223/ws'; // Ajusta IP si cambia
 let ws;
 
 const comandosValidos = ['adelante', 'atras', 'izquierda', 'derecha', 'stop'];
