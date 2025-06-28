@@ -1,0 +1,286 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{graphicx}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{color}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{tikz}
+\geometry{margin=2.5cm}
+
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{backgray}{rgb}{0.95,0.95,0.95}
+
+\lstset{
+    backgroundcolor=\color{backgray},
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    captionpos=b,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{codegray}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{AUTO}
+\lhead{Análisis Técnico}
+\rfoot{\thepage}
+
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+
+\begin{document}
+
+% Portada
+\begin{titlepage}
+    \centering
+    \vspace*{3cm}
+    \includegraphics[width=0.8\textwidth]{portada.jpg} % Reemplaza con tu imagen
+    \vspace{2cm}
+
+    {\Huge \textbf{AUTO}}\\[0.5cm]
+    {\Large Análisis técnico del sistema robótico}\\[1.5cm]
+
+    \textbf{Autores:} Claudio Hernandez y David Ochoa\\
+    \textbf{Fecha:} \today\\
+    \vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{¿Qué es AUTO?}
+
+AUTO es un robot autónomo con cámara basado en ESP32 que puede ser controlado manual o automáticamente a través de inteligencia artificial. Es un sistema robótico completo que integra hardware, IA y una aplicación móvil.
+
+\section{Componentes Principales}
+
+\subsection{Hardware ESP32}
+\begin{itemize}
+    \item Control de 4 motores para movimiento.
+    \item Cámara integrada con video en tiempo real.
+    \item Doble WiFi: modo AP y red doméstica.
+    \item Comunicación WebSocket.
+    \item Servidor HTTP integrado.
+\end{itemize}
+
+\subsection{Aplicación móvil (React Native)}
+\begin{itemize}
+    \item Flechas virtuales para control.
+    \item Visualización de video en tiempo real.
+    \item Configuración de red WiFi.
+    \item Escaneo automático de IPs.
+    \item Comunicación WebSocket para control.
+\end{itemize}
+
+\subsection{Servidor Node.js con IA}
+\begin{itemize}
+    \item Captura de imágenes desde ESP32.
+    \item Procesamiento con Google Gemini AI.
+    \item YOLO para detección de objetos.
+    \item Galería de imágenes web.
+    \item API REST para gestión de datos.
+\end{itemize}
+
+\subsection{Portal de descarga APK}
+Página web para descargar la app Android que controla el robot.
+\newpage
+\section{Funcionalidades Principales}
+
+\subsection{Control Manual}
+Desde la app móvil se puede controlar el robot y ver el video en tiempo real.
+
+\subsection{Control Autónomo}
+La IA analiza imágenes y decide los movimientos del robot automáticamente.
+
+\subsection{Detección de Objetos}
+YOLOv4 identifica objetos en la imagen y genera datos con su posición.
+
+\section{Flujo de Funcionamiento}
+
+\begin{enumerate}
+    \item Encendido del ESP32, inicia como punto de acceso.
+    \item Conexión desde móvil y uso de app.
+    \item Control manual o automático según elección.
+    \item En modo IA:
+    \begin{itemize}
+        \item Captura imágenes cada 2.5 segundos.
+        \item Gemini analiza y decide movimientos.
+        \item El robot actúa en consecuencia.
+    \end{itemize}
+\end{enumerate}
+
+\section{Casos de Uso}
+
+\begin{itemize}
+    \item Exploración autónoma de entornos.
+    \item Vigilancia con cámara en vivo.
+    \item Educación en robótica e IA.
+    \item Prototipado de vehículos inteligentes.
+\end{itemize}
+\newpage
+\section{Evaluación TRL del Proyecto}
+
+\subsection{TRL 1: Principios Básicos Observados}
+
+En esta fase, el equipo conceptualizó la idea de un vehículo autónomo con control por cámara. Se investigaron tecnologías viables como:
+\begin{itemize}
+    \item Microcontroladores con conectividad (ESP32).
+    \item Algoritmos de navegación autónoma.
+    \item Redes neuronales para visión por computadora.
+    \item Plataformas móviles (chasis con motores).
+\end{itemize}
+
+
+
+\subsection{TRL 2: Formulación del Concepto Tecnológico}
+
+Aquí se definió una arquitectura inicial:
+\begin{itemize}
+    \item Uso del ESP32 con cámara y control de motores.
+    \item Aplicación móvil como interfaz principal.
+    \item Incorporación de IA para decisiones de movimiento.
+\end{itemize}
+
+También se bosquejaron los posibles flujos de trabajo y requerimientos:
+\begin{itemize}
+    \item Flujo de imágenes → análisis IA → comando al robot.
+    \item Comunicación vía WebSocket y HTTP.
+\end{itemize}
+
+
+
+\subsection{TRL 3: Prueba Experimental de Concepto}
+
+Se desarrollaron prototipos de laboratorio por separado:
+\begin{itemize}
+    \item \textbf{Prototipo ESP32:} Transmisión de video y control de motores.
+    \item \textbf{App React Native:} Prueba de conectividad y comandos por WebSocket.
+    \item \textbf{Servidor Node.js:} Captura de imágenes y conexión con API de IA.
+\end{itemize}
+
+Los componentes se probaron de forma individual y luego se conectaron en pruebas integradas básicas en laboratorio. Esto validó que el concepto global era técnicamente viable.
+
+
+
+
+\subsection{Estado Actual: TRL 4-5}
+\textbf{TRL 4}: Validación de componentes en laboratorio.\\
+\textbf{TRL 5}: Validación de componentes en entorno relevante.
+
+\subsubsection*{Fortalezas}
+\begin{itemize}
+    \item Sistema funcional con arquitectura modular.
+    \item Comunicación efectiva con WebSocket.
+    \item App móvil funcional.
+\end{itemize}
+
+\subsubsection*{Limitaciones}
+\begin{itemize}
+    \item Sólo usa una cámara como sensor.
+    \item IA dependiente de internet (Gemini).
+    \item Sin sensores inerciales, GPS ni failsafe.
+\end{itemize}
+
+\section{Mejoras Propuestas para TRL 6}
+
+\subsection{Ampliar Sensado}
+Integrar sensores ultrasónicos, IMU y GPS:
+
+\begin{lstlisting}[language=C++]
+// Sensor de proximidad
+#define TRIG_FRONT 5
+#define ECHO_FRONT 18
+
+// IMU
+#include <MPU6050.h>
+MPU6050 imu;
+\end{lstlisting}
+
+\subsection{IA Híbrida (Local + Nube)}
+
+\begin{lstlisting}[language=JavaScript]
+// IA híbrida
+async function makeDecision(data) {
+    const emergency = localModel.predict(data.sensors);
+    if (emergency === 'STOP') return emergency;
+
+    return await cloudAI.analyze(data.image);
+}
+\end{lstlisting}
+
+\newpage
+\section{Hacia TRL 7: Validación Operacional}
+
+\subsection{Planificación de Rutas}
+
+\begin{lstlisting}[language=Python]
+def a_star(start, goal, grid):
+    # Búsqueda de ruta óptima
+    pass
+\end{lstlisting}
+
+\subsection{Comunicación Resiliente}
+
+\begin{lstlisting}[language=C++]
+if (mesh.isConnected()) {
+    mesh.broadcast(cmd);
+} else {
+    radio.transmit(cmd);
+}
+\end{lstlisting}
+
+\section{TRL 8-9: Sistema Comercial y Certificado}
+
+\begin{itemize}
+    \item Certificación ISO/IEEE
+    \item Microservicios y orquestación (Kubernetes)
+    \item Pruebas a gran escala (1000+ horas)
+\end{itemize}
+
+\section{Cronograma de Desarrollo}
+
+\subsection*{Fase 1: TRL 5 → 6}
+\begin{itemize}
+    \item Sensores nuevos
+    \item IA local
+    \item Pruebas semi-controladas
+\end{itemize}
+
+\subsection*{Fase 2: TRL 6 → 7}
+\begin{itemize}
+    \item SLAM
+    \item Comunicaciones resilientes
+    \item Validación externa
+\end{itemize}
+
+\subsection*{Fase 3: TRL 7 → 8-9}
+\begin{itemize}
+    \item Certificaciones
+    \item Manufactura piloto
+    \item Comercialización
+\end{itemize}
+
+\section{Conclusión}
+
+AUTO representa un prototipo funcional en TRL 4-5 con alto potencial para escalar hacia un sistema comercial. Para avanzar, se recomienda:
+\begin{itemize}
+    \item Integración de sensores avanzados.
+    \item IA descentralizada y robusta.
+    \item Validación en condiciones reales.
+    \item Estándares industriales.
+\end{itemize}
+
+Con el enfoque adecuado, puede evolucionar hasta convertirse en un producto competitivo en sectores como educación, vigilancia y exploración.
+
+\end{document}
