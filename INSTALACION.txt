@@ -1,0 +1,958 @@
+# AUTO - Manual de Instalación
+## Sistema Robótico Autónomo con IA
+
+---
+
+## 📋 Índice
+1. [Descripción General](#descripción-general)
+2. [Requisitos del Sistema](#requisitos-del-sistema)
+3. [Componentes Hardware](#componentes-hardware)
+4. [Instalación del Hardware ESP32](#instalación-del-hardware-esp32)
+5. [Configuración del Servidor Node.js](#configuración-del-servidor-nodejs)
+6. [Instalación de la Aplicación Móvil](#instalación-de-la-aplicación-móvil)
+7. [Configuración del Sistema de IA](#configuración-del-sistema-de-ia)
+8. [Portal de Descarga APK](#portal-de-descarga-apk)
+9. [Puesta en Marcha](#puesta-en-marcha)
+10. [Solución de Problemas](#solución-de-problemas)
+11. [Mantenimiento](#mantenimiento)
+
+---
+
+## 🎯 Descripción General
+
+AUTO es un robot autónomo basado en ESP32 con las siguientes capacidades:
+- Control manual desde aplicación móvil
+- Navegación autónoma con IA (Google Gemini)
+- Transmisión de video en tiempo real
+- Detección de objetos básica
+- Comunicación WiFi dual (AP + Cliente)
+
+---
+
+## 💻 Requisitos del Sistema
+
+### Software Requerido:
+- **Arduino IDE** 1.8.19 o superior
+- **Node.js** 16.0 o superior
+- **Python** 3.8 o superior
+- **Android Studio** (para compilar APK)
+- **React Native CLI**
+- **Git**
+
+### Sistemas Operativos Compatibles:
+- Windows 10/11
+
+### Requisitos de Red:
+- Router WiFi 2.4GHz
+- Conexión a Internet (para IA)
+- Puerto 3000 libre (servidor Node.js)
+- Puerto 80 libre (ESP32)
+
+---
+
+## 🔧 Componentes Hardware
+
+### Lista de Materiales:
+```
+┌─────────────────────────────────────────────────────────┐
+│ COMPONENTE               │ CANTIDAD │ ESPECIFICACIONES   │
+├─────────────────────────────────────────────────────────┤
+│ ESP32-CAM                │    1     │ AI-Thinker        │
+│ ESP32 DevKit             │    1     │ 38 pines          │
+│ Motores DC               │    4     │ 6V, reducción 1:48│
+│ Driver L298N             │    2     │ Dual H-Bridge     │
+│ Batería LiPo             │    3     │ 3.7, 2200mAh      │
+│ Cargador LiPo            │    1     │ Balance charger   │
+│ Jumpers/Cables           │   20     │ Macho-Hembra      │     │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 Instalación del Hardware ESP32
+
+### Paso 1: Configuración del Arduino IDE
+
+```bash
+# 1. Instalar Arduino IDE desde: https://www.arduino.cc/
+
+# 2. Agregar URL del ESP32 en Preferencias:
+# https://dl.espressif.com/dl/package_esp32_index.json
+
+# 3. Instalar placa ESP32:
+# Herramientas → Gestor de Tarjetas → ESP32 → Instalar
+
+# 4. Seleccionar placa:
+# Herramientas → Placa → ESP32 Arduino → AI Thinker ESP32-CAM
+```
+
+### Paso 2: Instalación de Librerías
+
+```cpp
+// Librerías requeridas (instalar desde Gestor de Librerías):
+#include <WiFi.h>              // ESP32 Core
+#include <WebSocketsServer.h>  // Markus Sattler
+#include <ArduinoJson.h>       // Benoit Blanchon
+#include <AsyncTCP.h>          // Me-No-Dev
+#include <ESPAsyncWebServer.h> // Me-No-Dev
+#include "esp_camera.h"        // ESP32 Core
+```
+
+### Paso 3: Conexiones Hardware
+
+```
+ESP32-CAM Pinout:
+┌─────────────────────────────────────────────────────────┐
+│ GPIO │ FUNCIÓN        │ CONEXIÓN                        │
+├─────────────────────────────────────────────────────────┤
+│  12  │ Motor1_IN1     │ Driver L298N Pin IN1            │
+│  13  │ Motor1_IN2     │ Driver L298N Pin IN2            │
+│  14  │ Motor2_IN3     │ Driver L298N Pin IN3            │
+│  15  │ Motor2_IN4     │ Driver L298N Pin IN4            │
+│   2  │ LED_STATUS     │ LED + Resistencia 220Ω → GND    │
+│   4  │ FLASH_LED      │ LED Flash incorporado           │
+│  3V3 │ VCC            │ Alimentación 3.3V               │
+│  GND │ GND            │ Tierra común                    │
+└─────────────────────────────────────────────────────────┘
+
+Driver L298N Conexiones:
+┌─────────────────────────────────────────────────────────┐
+│ PIN  │ CONEXIÓN                                         │
+├─────────────────────────────────────────────────────────┤
+│ VCC  │ Batería 7.4V (+)                                │
+│ GND  │ Batería 7.4V (-) + ESP32 GND                    │
+│ 5V   │ ESP32 VIN (opcional, usar con cuidado)          │
+│ OUT1 │ Motor Frontal Izquierdo (+)                     │
+│ OUT2 │ Motor Frontal Izquierdo (-)                     │
+│ OUT3 │ Motor Frontal Derecho (+)                       │
+│ OUT4 │ Motor Frontal Derecho (-)                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Paso 4: Programación del ESP32
+
+```cpp
+// sketch_apr3a.ino - Código principal
+#include <WiFi.h>
+#include <WebSocketsServer.h>
+#include <ArduinoJson.h>
+#include "esp_camera.h"
+
+// Configuración de pines de cámara (AI-Thinker ESP32-CAM)
+#define PWDN_GPIO_NUM     32
+#define RESET_GPIO_NUM    -1
+#define XCLK_GPIO_NUM      0
+#define SIOD_GPIO_NUM     26
+#define SIOC_GPIO_NUM     27
+#define Y9_GPIO_NUM       35
+#define Y8_GPIO_NUM       34
+#define Y7_GPIO_NUM       39
+#define Y6_GPIO_NUM       36
+#define Y5_GPIO_NUM       21
+#define Y4_GPIO_NUM       19
+#define Y3_GPIO_NUM       18
+#define Y2_GPIO_NUM        5
+#define VSYNC_GPIO_NUM    25
+#define HREF_GPIO_NUM     23
+#define PCLK_GPIO_NUM     22
+
+// Configuración WiFi
+const char* ssid_AP = "AUTO_Robot";
+const char* password_AP = "12345678";
+
+// Configuración de motores
+#define MOTOR1_IN1 12
+#define MOTOR1_IN2 13
+#define MOTOR2_IN3 14
+#define MOTOR2_IN4 15
+
+WebSocketsServer webSocket = WebSocketsServer(81);
+
+void setup() {
+    Serial.begin(115200);
+    
+    // Inicializar pines de motores
+    pinMode(MOTOR1_IN1, OUTPUT);
+    pinMode(MOTOR1_IN2, OUTPUT);
+    pinMode(MOTOR2_IN3, OUTPUT);
+    pinMode(MOTOR2_IN4, OUTPUT);
+    
+    // Configurar cámara
+    camera_config_t config;
+    config.ledc_channel = LEDC_CHANNEL_0;
+    config.ledc_timer = LEDC_TIMER_0;
+    config.pin_d0 = Y2_GPIO_NUM;
+    config.pin_d1 = Y3_GPIO_NUM;
+    config.pin_d2 = Y4_GPIO_NUM;
+    config.pin_d3 = Y5_GPIO_NUM;
+    config.pin_d4 = Y6_GPIO_NUM;
+    config.pin_d5 = Y7_GPIO_NUM;
+    config.pin_d6 = Y8_GPIO_NUM;
+    config.pin_d7 = Y9_GPIO_NUM;
+    config.pin_xclk = XCLK_GPIO_NUM;
+    config.pin_pclk = PCLK_GPIO_NUM;
+    config.pin_vsync = VSYNC_GPIO_NUM;
+    config.pin_href = HREF_GPIO_NUM;
+    config.pin_sscb_sda = SIOD_GPIO_NUM;
+    config.pin_sscb_scl = SIOC_GPIO_NUM;
+    config.pin_pwdn = PWDN_GPIO_NUM;
+    config.pin_reset = RESET_GPIO_NUM;
+    config.xclk_freq_hz = 20000000;
+    config.pixel_format = PIXFORMAT_JPEG;
+    config.frame_size = FRAMESIZE_VGA;
+    config.jpeg_quality = 12;
+    config.fb_count = 1;
+    
+    esp_camera_init(&config);
+    
+    // Inicializar WiFi en modo AP
+    WiFi.softAP(ssid_AP, password_AP);
+    Serial.println("AP iniciado");
+    Serial.print("IP: ");
+    Serial.println(WiFi.softAPIP());
+    
+    // Inicializar WebSocket
+    webSocket.begin();
+    webSocket.onEvent(webSocketEvent);
+}
+
+void loop() {
+    webSocket.loop();
+}
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+    switch(type) {
+        case WStype_TEXT:
+            String command = String((char*)payload);
+            executeCommand(command);
+            break;
+    }
+}
+
+void executeCommand(String command) {
+    if (command == "FORWARD") {
+        moveForward();
+    } else if (command == "BACKWARD") {
+        moveBackward();
+    } else if (command == "LEFT") {
+        turnLeft();
+    } else if (command == "RIGHT") {
+        turnRight();
+    } else if (command == "STOP") {
+        stopMotors();
+    }
+}
+
+void moveForward() {
+    digitalWrite(MOTOR1_IN1, HIGH);
+    digitalWrite(MOTOR1_IN2, LOW);
+    digitalWrite(MOTOR2_IN3, HIGH);
+    digitalWrite(MOTOR2_IN4, LOW);
+}
+
+void moveBackward() {
+    digitalWrite(MOTOR1_IN1, LOW);
+    digitalWrite(MOTOR1_IN2, HIGH);
+    digitalWrite(MOTOR2_IN3, LOW);
+    digitalWrite(MOTOR2_IN4, HIGH);
+}
+
+void turnLeft() {
+    digitalWrite(MOTOR1_IN1, LOW);
+    digitalWrite(MOTOR1_IN2, HIGH);
+    digitalWrite(MOTOR2_IN3, HIGH);
+    digitalWrite(MOTOR2_IN4, LOW);
+}
+
+void turnRight() {
+    digitalWrite(MOTOR1_IN1, HIGH);
+    digitalWrite(MOTOR1_IN2, LOW);
+    digitalWrite(MOTOR2_IN3, LOW);
+    digitalWrite(MOTOR2_IN4, HIGH);
+}
+
+void stopMotors() {
+    digitalWrite(MOTOR1_IN1, LOW);
+    digitalWrite(MOTOR1_IN2, LOW);
+    digitalWrite(MOTOR2_IN3, LOW);
+    digitalWrite(MOTOR2_IN4, LOW);
+}
+```
+
+---
+
+## 🌐 Configuración del Servidor Node.js
+
+### Paso 1: Instalación de Node.js
+
+```bash
+# Windows (usando Chocolatey)
+choco install nodejs
+
+# macOS (usando Homebrew)
+brew install node
+
+# Ubuntu/Debian
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verificar instalación
+node --version
+npm --version
+```
+
+### Paso 2: Configuración del Proyecto
+
+```bash
+# Navegar a la carpeta del servidor
+cd AUTO-/server
+
+# Instalar dependencias
+npm install
+
+# Si no existe package.json, crearlo:
+npm init -y
+
+# Instalar dependencias específicas
+npm install express multer axios ws sharp
+npm install --save-dev nodemon
+```
+
+### Paso 3: Configuración de Variables de Entorno
+
+```bash
+# Crear archivo .env en /server
+echo "GEMINI_API_KEY=tu_clave_de_gemini_aqui" > .env
+echo "PORT=3000" >> .env
+echo "ESP32_IP=192.168.4.1" >> .env
+```
+
+### Paso 4: Instalación de dependencias adicionales
+
+```bash
+# Verificar instalación de Node.js
+node --version
+npm --version
+```
+
+### Paso 5: Configuración del servidor
+
+```javascript
+// server/server.js
+const express = require('express');
+const multer = require('multer');
+const axios = require('axios');
+const WebSocket = require('ws');
+const path = require('path');
+const fs = require('fs');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Configuración de multer para subida de archivos
+const upload = multer({ dest: 'uploads/' });
+
+// Middleware
+app.use(express.static('public'));
+app.use(express.json());
+
+// Configuración de WebSocket para ESP32
+const wss = new WebSocket.Server({ port: 8080 });
+
+// API de Google Gemini
+class GeminiAI {
+    constructor(apiKey) {
+        this.apiKey = apiKey;
+        this.endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent';
+    }
+    
+    async analyzeImage(imageBase64) {
+        try {
+            const response = await axios.post(`${this.endpoint}?key=${this.apiKey}`, {
+                contents: [{
+                    parts: [
+                        {text: "Analiza esta imagen de un robot y decide: FORWARD, BACKWARD, LEFT, RIGHT, STOP. Responde solo con uno de estos comandos."},
+                        {inline_data: {mime_type: "image/jpeg", data: imageBase64}}
+                    ]
+                }]
+            });
+            
+            return response.data.candidates[0].content.parts[0].text.trim();
+        } catch (error) {
+            console.error('Error con Gemini AI:', error);
+            return 'STOP';
+        }
+    }
+}
+
+const gemini = new GeminiAI(process.env.GEMINI_API_KEY);
+
+// Rutas API
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.post('/capture', upload.single('image'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No se recibió imagen' });
+    }
+    
+    try {
+        // Leer imagen y convertir a base64
+        const imageBuffer = fs.readFileSync(req.file.path);
+        const imageBase64 = imageBuffer.toString('base64');
+        
+        // Analizar con Gemini AI
+        const command = await gemini.analyzeImage(imageBase64);
+        
+        // Enviar comando al ESP32
+        wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(command);
+            }
+        });
+        
+        // Limpiar archivo temporal
+        fs.unlinkSync(req.file.path);
+        
+        res.json({ 
+            success: true, 
+            command: command,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('Error procesando imagen:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+});
+
+// Cliente de captura automática
+async function startAutomaticCapture() {
+    const ESP32_IP = process.env.ESP32_IP || '192.168.4.1';
+    
+    setInterval(async () => {
+        try {
+            const response = await axios.get(`http://${ESP32_IP}/capture`, {
+                responseType: 'arraybuffer'
+            });
+            
+            const imageBase64 = Buffer.from(response.data).toString('base64');
+            const command = await gemini.analyzeImage(imageBase64);
+            
+            // Enviar comando al ESP32
+            await axios.post(`http://${ESP32_IP}/command`, { command });
+            
+            console.log(`Comando enviado: ${command}`);
+            
+        } catch (error) {
+            console.error('Error en captura automática:', error.message);
+        }
+    }, 2500); // Cada 2.5 segundos
+}
+
+app.listen(PORT, () => {
+    console.log(`Servidor ejecutándose en puerto ${PORT}`);
+    console.log(`Página web: http://localhost:${PORT}`);
+    
+    // Iniciar captura automática después de 5 segundos
+    setTimeout(startAutomaticCapture, 5000);
+});
+```
+
+---
+
+## 📱 Instalación de la Aplicación Móvil
+
+### Paso 1: Configuración del Entorno React Native
+
+```bash
+# Instalar React Native CLI
+npm install -g react-native-cli
+
+# Instalar dependencias del proyecto
+cd AUTO-
+npm install
+
+# Para iOS (solo macOS)
+cd ios && pod install && cd ..
+
+# Para Android, configurar ANDROID_HOME en variables de entorno
+export ANDROID_HOME=$HOME/Android/Sdk
+export PATH=$PATH:$ANDROID_HOME/emulator
+export PATH=$PATH:$ANDROID_HOME/tools
+export PATH=$PATH:$ANDROID_HOME/tools/bin
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+```
+
+### Paso 2: Configuración de dependencias
+
+```bash
+# Instalar dependencias específicas
+npm install @react-native-community/netinfo
+npm install react-native-vector-icons
+npm install react-native-webrtc
+npm install @react-native-async-storage/async-storage
+
+# Para Android
+npx react-native link react-native-vector-icons
+```
+
+### Paso 3: Configuración de permisos Android
+
+```xml
+<!-- android/app/src/main/AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    
+    <application
+        android:name=".MainApplication"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false"
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="true">
+        
+        <activity
+            android:name=".MainActivity"
+            android:label="@string/app_name"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+```
+
+### Paso 4: Compilación y instalación
+
+```bash
+# Compilar para Android
+npx react-native run-android
+
+# Compilar para iOS (solo macOS)
+npx react-native run-ios
+
+# Generar APK de release
+cd android
+./gradlew assembleRelease
+
+# El APK estará en: android/app/build/outputs/apk/release/app-release.apk
+```
+
+---
+
+## 🤖 Configuración del Sistema de IA
+
+### Paso 1: Obtener API Key de Google Gemini
+
+```bash
+# 1. Ir a: https://makersuite.google.com/app/apikey
+# 2. Crear nuevo proyecto
+# 3. Generar API Key
+# 4. Copiar la clave generada
+```
+
+### Paso 2: Configuración del archivo .env
+
+```bash
+# Agregar la API key al archivo .env
+echo "GEMINI_API_KEY=tu_clave_aqui" >> .env
+
+# Verificar configuración
+cat .env
+```
+
+---
+
+## 🌐 Portal de Descarga APK
+
+### Paso 1: Configuración del servidor web
+
+```bash
+cd AUTO-/apk_page
+
+# Instalar dependencias
+pip install flask
+
+# Verificar que existe docker-compose.yml
+ls -la docker-compose.yml Dockerfile
+```
+
+### Paso 2: Configuración de Flask
+
+```python
+# apk_page/app.py
+from flask import Flask, render_template, send_file, request
+import os
+
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/download')
+def download_apk():
+    apk_path = 'AUTO_v1.0.apk'
+    if os.path.exists(apk_path):
+        return send_file(apk_path, as_attachment=True)
+    else:
+        return "APK no encontrado", 404
+
+@app.route('/status')
+def status():
+    return {
+        'status': 'online',
+        'version': '1.0',
+        'apk_available': os.path.exists('AUTO_v1.0.apk')
+    }
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
+```
+
+### Paso 3: Plantilla HTML
+
+```html
+<!-- apk_page/templates/index.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTO - Descarga</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .download-btn {
+            background: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 18px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+        .download-btn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+        .features {
+            text-align: left;
+            margin: 30px 0;
+        }
+        .features li {
+            margin: 10px 0;
+            padding-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 AUTO Robot</h1>
+        <h2>Control Robótico Inteligente</h2>
+        
+        <p>Controla tu robot AUTO desde tu dispositivo móvil con inteligencia artificial integrada.</p>
+        
+        <div class="features">
+            <h3>✨ Características:</h3>
+            <ul>
+                <li>🎮 Control manual por joystick</li>
+                <li>🤖 Navegación autónoma con IA</li>
+                <li>📹 Video en tiempo real</li>
+                <li> Conexión WiFi dual</li>
+                <li>⚡ Respuesta instantánea</li>
+            </ul>
+        </div>
+        
+        <a href="/download" class="download-btn">
+            📱 Descargar APK
+        </a>
+        
+        <p style="margin-top: 30px; font-size: 14px; opacity: 0.8;">
+            Versión 1.0 | Compatible con Android 7.0+
+        </p>
+    </div>
+</body>
+</html>
+```
+
+---
+
+## 🚀 Puesta en Marcha
+
+### Secuencia de Inicio:
+
+```bash
+# 1. Verificar conexiones hardware
+# Revisar todas las conexiones según diagrama de pines
+
+# 2. Encender el robot
+# Conectar batería y verificar LED de estado
+
+# 3. Subir código al ESP32
+cd AUTO-/sketch_apr3a
+# Arduino IDE: Subir sketch_apr3a.ino
+
+# 4. Iniciar servidor Node.js
+cd AUTO-/server
+npm start
+
+# 5. Iniciar portal APK (opcional)
+cd AUTO-/apk_page
+python app.py
+
+# 6. Instalar y abrir app móvil
+# Instalar APK en dispositivo Android
+# Abrir aplicación AUTO
+```
+
+### Configuración Inicial:
+
+```bash
+# 1. Conectar móvil al WiFi del robot
+# SSID: AUTO_Robot
+# Password: 12345678
+
+# 2. Abrir aplicación móvil
+# La app debería detectar automáticamente el robot
+
+# 3. Probar controles básicos
+# Usar botones direccionales para verificar movimiento
+
+# 4. Configurar red doméstica (opcional)
+# En la app: Configuración → WiFi → Ingresar datos de red
+
+# 5. Activar modo IA
+# Servidor → Captura automática → Iniciar
+```
+
+---
+
+## 🔧 Solución de Problemas
+
+### Problemas Comunes:
+
+#### 🚫 ESP32 no se conecta
+
+**Síntomas:**
+- LED de estado no enciende
+- No aparece red WiFi "AUTO_Robot"
+
+**Soluciones:**
+```bash
+# 1. Verificar alimentación
+multimeter_check(battery_voltage) >= 7.0V
+
+# 2. Revisar conexiones
+check_pins(VCC, GND, all_motor_pins)
+
+# 3. Re-flashear firmware
+# Arduino IDE → Herramientas → Borrar Flash → Sketch + Datos WiFi
+# Subir código nuevamente
+```
+
+#### 📱 App no detecta robot
+
+**Síntomas:**
+- App muestra "Robot no encontrado"
+- No hay video en pantalla
+
+**Soluciones:**
+```bash
+# 1. Verificar conexión WiFi
+wifi_settings → AUTO_Robot → Conectar
+
+# 2. Comprobar IP del robot
+ping 192.168.4.1
+
+# 3. Reiniciar app y robot
+# Cerrar app → Desconectar/conectar batería → Reabrir app
+```
+
+#### 🤖 IA no responde
+
+**Síntomas:**
+- Robot no se mueve automáticamente
+- Error en servidor Node.js
+
+**Soluciones:**
+```bash
+# 1. Verificar API Key de Gemini
+check_env_file(.env) → GEMINI_API_KEY
+
+# 2. Comprobar conexión a internet
+ping google.com
+
+# 3. Reiniciar servidor
+npm restart
+
+# 4. Verificar logs
+tail -f server.log
+```
+
+#### ⚡ Motores no funcionan
+
+**Síntomas:**
+- Robot no se mueve con controles manuales
+- Sonidos extraños de motores
+
+**Soluciones:**
+```bash
+# 1. Verificar alimentación de motores
+check_voltage(L298N_VCC) >= 6.0V
+
+# 2. Probar motores individualmente
+# Conectar motor directamente a batería (brevemente)
+
+# 3. Revisar driver L298N
+check_pins(IN1, IN2, IN3, IN4) → ESP32
+
+# 4. Verificar código de control
+Serial.println("Motor command: " + command);
+```
+
+### Códigos de Error:
+
+```bash
+┌─────────────────────────────────────────────────────────┐
+│ CÓDIGO │ DESCRIPCIÓN              │ SOLUCIÓN            │
+├─────────────────────────────────────────────────────────┤
+│ E001   │ WiFi no conecta          │ Reiniciar ESP32     │
+│ E002   │ Cámara no inicializa     │ Revisar pines       │
+│ E003   │ WebSocket desconectado   │ Verificar red       │
+│ E004   │ Gemini API error         │ Comprobar API key   │
+│ E005   │ Motores no responden     │ Revisar L298N       │
+│ E006   │ Batería baja             │ Cargar batería      │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔋 Mantenimiento
+
+### Rutinas de Mantenimiento:
+
+#### Diario:
+```bash
+# Verificar nivel de batería
+check_battery_voltage() >= 7.0V
+
+# Limpiar lente de cámara
+clean_camera_lens()
+
+# Revisar conexiones sueltas
+visual_inspection(all_connections)
+```
+
+#### Semanal:
+```bash
+# Actualizar dependencias
+cd AUTO-/server && npm update
+cd AUTO- && npm update
+
+# Limpiar archivos temporales
+rm -rf server/uploads/*
+rm -rf server/logs/*.old
+
+# Verificar integridad de archivos
+git status → check_for_corrupted_files
+```
+
+#### Mensual:
+```bash
+# Calibrar motores
+run_motor_calibration_sequence()
+
+# Backup de configuración
+cp .env .env.backup.$(date +%Y%m%d)
+tar -czf backup_$(date +%Y%m%d).tar.gz AUTO-/
+```
+
+### Actualización de Software:
+
+```bash
+# Actualizar código ESP32
+git pull origin main
+# Arduino IDE → Subir nuevo sketch
+
+# Actualizar servidor Node.js
+cd AUTO-/server
+git pull origin main
+npm install
+npm restart
+
+# Actualizar app móvil
+cd AUTO-
+git pull origin main
+npm install
+npx react-native run-android
+```
+
+---
+
+## 📞 Soporte y Contacto
+
+### Información de Soporte:
+
+```
+📧 Email: soporte@auto-robot.com
+🌐 Web: https://auto-robot.com
+📱 WhatsApp: +56 9 XXXX XXXX
+🕒 Horario: L-V 9:00-18:00 (GMT-3)
+```
+
+### Recursos Adicionales:
+
+- 📚 Documentación completa: [docs.auto-robot.com]
+- 💬 Foro de usuarios: [forum.auto-robot.com]
+- 🎥 Videos tutoriales: [youtube.com/auto-robot]
+- 📦 Repositorio GitHub: [github.com/auto-robot/AUTO]
+
+### Información de Versión:
+
+```
+AUTO Robot Control System v1.0
+Build: 2025.06.29
+Compatible: ESP32, Android 7.0+, Node.js 16+
+Licencia: MIT
+```
+
+---
+
+¡Disfruta controlando tu robot AUTO! 🚗🤖
+
+---
+
+**Nota:** Este manual asume conocimientos básicos de electrónica y programación. Para usuarios principiantes, se recomienda asistencia técnica durante la primera instalación.
